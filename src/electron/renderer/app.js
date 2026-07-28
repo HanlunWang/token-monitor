@@ -4964,15 +4964,20 @@ function renderLimits() {
   state.codexSwitchPopoverRenderPending = false;
   const limitsEnabled = state.settings?.limitsEnabled !== false;
   const enabled = enabledLimitProviderSet();
-  const providers = providersByLimitProviderId(state.stats?.limits?.providers || []);
-  const nodes = [];
   const rows = limitProviderOrderApi
     .orderedLimitProviders(LIMIT_PROVIDERS, state.settings?.limitProviderOrder)
     .filter(({ id }) => limitsEnabled && enabled.has(id));
-  if (rows.length === 0) {
-    els.limitsPanel.replaceChildren();
-    return;
-  }
+  els.limitsPanel.replaceChildren(...buildLimitProviderNodes(rows));
+}
+
+// Builds the full limits-page provider rows (account groups included) for an
+// ordered provider list. Shared by the Limits view and the Home limits module
+// in "full" display mode so both surfaces render identically.
+function buildLimitProviderNodes(rows) {
+  const limitsEnabled = state.settings?.limitsEnabled !== false;
+  const enabled = enabledLimitProviderSet();
+  const providers = providersByLimitProviderId(state.stats?.limits?.providers || []);
+  const nodes = [];
   for (const { id, label } of rows) {
     const providerEnabled = limitsEnabled && enabled.has(id);
     const providerEntries = providerEnabled
@@ -5014,7 +5019,7 @@ function renderLimits() {
         : undefined;
     nodes.push(renderLimitProviderRow(id, label, provider, color, rowOptions));
   }
-  els.limitsPanel.replaceChildren(...nodes);
+  return nodes;
 }
 
 function serviceStatusLabel(status) {
@@ -5779,6 +5784,25 @@ function homeLimitWindowLabel(window, providerId = '', visibleWindows = []) {
 
 function renderHomeLimitModule() {
   const { module, body } = homeModuleShell('limits', t('home.limits'), 'limits');
+  if (state.settings?.homeLimitDisplayMode === 'full') {
+    module.classList.add('home-module-limits-full');
+    const limitsEnabled = state.settings?.limitsEnabled !== false;
+    const enabled = enabledLimitProviderSet();
+    const hidden = hiddenHomeLimitProviderSet();
+    const providerRows = limitProviderOrderApi
+      .orderedLimitProviders(LIMIT_PROVIDERS, homeLimitProviderOrderValue())
+      .filter(({ id }) => limitsEnabled && enabled.has(id) && !hidden.has(id));
+    const nodes = providerRows.length > 0 ? buildLimitProviderNodes(providerRows) : [];
+    if (nodes.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'home-module-empty';
+      empty.textContent = t('home.noLimits');
+      body.append(empty);
+      return module;
+    }
+    body.append(...nodes);
+    return module;
+  }
   const rows = homeLimitRows();
   if (rows.length === 0) {
     const empty = document.createElement('div');
@@ -8149,6 +8173,18 @@ function renderHomeLimitProviderList() {
     .orderedLimitProviders(LIMIT_PROVIDERS, homeLimitProviderOrderValue())
     .filter(({ id }) => enabled.has(id));
   const hasCustomOrder = Boolean(state.settings?.homeLimitProviderOrder);
+  const fullViewLabel = document.createElement('label');
+  fullViewLabel.className = 'checkbox-label home-limit-status-setting';
+  const fullViewInput = document.createElement('input');
+  fullViewInput.type = 'checkbox';
+  fullViewInput.checked = state.settings?.homeLimitDisplayMode === 'full';
+  const fullViewText = document.createElement('span');
+  fullViewText.textContent = t('settings.home.fullLimitView');
+  fullViewInput.addEventListener('change', async () => {
+    await saveSettings({ homeLimitDisplayMode: fullViewInput.checked ? 'full' : 'compact' });
+    renderHomeIfVisible();
+  });
+  fullViewLabel.append(fullViewInput, fullViewText);
   const statusLabel = document.createElement('label');
   statusLabel.className = 'checkbox-label home-limit-status-setting';
   const statusInput = document.createElement('input');
@@ -8233,7 +8269,7 @@ function renderHomeLimitProviderList() {
   showAll.addEventListener('click', () => void showAllHomeLimitProviders());
   headerActions.append(reset, showAll);
   header.append(note, headerActions);
-  wrap.append(statusLabel, providerNamesLabel, countLabel, header);
+  wrap.append(fullViewLabel, statusLabel, providerNamesLabel, countLabel, header);
   for (const { id, label, settingsLabel } of providers) {
     const isHidden = hidden.has(id);
     const row = document.createElement('div');

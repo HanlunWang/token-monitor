@@ -2595,6 +2595,12 @@ html.is-windows .settings-panel select option {
 .home-module-limits .home-module-body {
   gap: 12px;
 }
+/* Full limits view on Home mirrors the Limits page row spacing; the module card
+   already frames the list, so the trailing row drops its divider. */
+.home-module-limits-full .limit-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
 .home-list-row {
   display: grid;
   min-width: 0;
